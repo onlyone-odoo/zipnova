@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="product_template_form_view_zipnova" model="ir.ui.view">
+        <field name="name">product.template.form.zipnova</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group[@name='group_lots_and_weight']" position="inside">
+                <label
+                    for="zipnova_product_length"
+                    invisible="type != 'product' or (product_variant_count &gt; 1 and not is_product_variant)"
+                />
+                <div
+                    class="o_row"
+                    name="zipnova_product_length"
+                    invisible="type != 'product' or (product_variant_count &gt; 1 and not is_product_variant)"
+                >
+                    <field name="zipnova_product_length"/>
+                    <span>cm</span>
+                </div>
+                <label
+                    for="zipnova_product_height"
+                    invisible="type != 'product' or (product_variant_count &gt; 1 and not is_product_variant)"
+                />
+                <div
+                    class="o_row"
+                    name="zipnova_product_height"
+                    invisible="type != 'product' or (product_variant_count &gt; 1 and not is_product_variant)"
+                >
+                    <field name="zipnova_product_height"/>
+                    <span>cm</span>
+                </div>
+                <label
+                    for="zipnova_product_width"
+                    invisible="type != 'product' or (product_variant_count &gt; 1 and not is_product_variant)"
+                />
+                <div
+                    class="o_row"
+                    name="zipnova_product_width"
+                    invisible="type != 'product' or (product_variant_count &gt; 1 and not is_product_variant)"
+                >
+                    <field name="zipnova_product_width"/>
+                    <span>cm</span>
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="portal_my_orders_zipnova" name="Portal My Orders Zipnova">
+        <div class="mt-1">
+            <t t-if="order.zipnova_pickup_is_pickup and order.zipnova_pickup_name">
+                <div>
+                    <b>Pickup: </b>
+                    <t t-esc="(order.zipnova_pickup_address or '') + ' (' + (order.zipnova_pickup_name or '') + ')'"/>
+                </div>
+            </t>
+            <div t-if="order.zipnova_shipping_tracking">
+                <b>Tracking: </b>
+                <a
+                    t-att-href="order.zipnova_shipping_tracking"
+                    target="_blank"
+                    t-esc="order.zipnova_shipping_tracking"
+                />
+            </div>
+            <div t-if="order.zipnova_estimated_delivery_time">
+                <b>Estimated delivery: </b>
+                <span t-esc="order.zipnova_estimated_delivery_time"/>
+            </div>
+            <div t-if="order.zipnova_shipping_carrier_tracking_id_alt">
+                <b>Tracking code: </b>
+                <span t-esc="order.zipnova_shipping_carrier_tracking_id_alt"/>
+            </div>
+        </div>
+    </template>
+    <template id="portal_my_orders_inherit" inherit_id="sale.portal_my_orders">
+        <xpath expr="//t[@t-foreach='orders']//td[1]" position="inside">
+            <div id="zipnova_info" class="text-muted" style="font-size: 12px;">
+                <t t-call="zipnova.portal_my_orders_zipnova"/>
+            </div>
+        </xpath>
+    </template>
+</odoo>

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="payment_delivery_methods" inherit_id="website_sale.payment_delivery_methods">
+        <xpath expr="." position="inside">
+            <t t-if="delivery.delivery_type == 'zipnova' and delivery.zipnova_shipment_type_is_pickup">
+                <t t-set="zipnova_points" t-value="[]"/>
+                <t t-if="delivery.zipnova_shipment_type == 233" t-set="zipnova_points" t-value="zipnova_car_suc or []"/>
+                <t t-if="delivery.zipnova_shipment_type == 208" t-set="zipnova_points" t-value="zipnova_oca_suc or []"/>
+                <t t-if="delivery.zipnova_shipment_type == 1" t-set="zipnova_points" t-value="zipnova_and_suc or []"/>
+                <select
+                    t-att-name="'zipnova_pickup_%s' % delivery.id"
+                    t-att-id="'zipnova_pickup_%s' % delivery.id"
+                    class="form-select mt-3 mb-3 zipnova-pickup-select"
+                    t-att-data-delivery-carrier-id="delivery.id"
+                    t-att-data-zipnova-carrier-id="delivery.zipnova_shipment_type"
+                >
+                    <option value="">Select a pickup point</option>
+                    <t t-foreach="zipnova_points" t-as="pickup">
+                        <option
+                            t-att-value="pickup.point_id"
+                            t-att-data-carrier-id="pickup.carrier_id"
+                            t-att-data-point-id="pickup.point_id"
+                            t-att-data-name="pickup.name"
+                            t-att-data-address="pickup.address"
+                        >
+                            <t t-esc="pickup.name"/>
+                        </option>
+                    </t>
+                </select>
+            </t>
+        </xpath>
+    </template>
+</odoo>

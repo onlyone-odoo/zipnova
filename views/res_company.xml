@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_company_form_zipnova" model="ir.ui.view">
+        <field name="name">res.company.form.zipnova</field>
+        <field name="model">res.company</field>
+        <field name="inherit_id" ref="base.view_company_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Zipnova" name="zipnova">
+                    <group>
+                        <group string="General">
+                            <field name="zipnova_declared_value"/>
+                            <field name="zipnova_source"/>
+                            <field name="zipnova_origin_id"/>
+                        </group>
+                        <group string="API">
+                            <field name="zipnova_id"/>
+                            <field name="zipnova_key" password="True"/>
+                            <field name="zipnova_secret" password="True"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

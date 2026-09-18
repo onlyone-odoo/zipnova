@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="zipnova_shipping_company_rule" model="ir.rule">
+        <field name="name">Zipnova pickup points: multi-company</field>
+        <field name="model_id" ref="model_zipnova_shipping"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+    <record id="zipnova_log_company_rule" model="ir.rule">
+        <field name="name">Zipnova logs: multi-company</field>
+        <field name="model_id" ref="model_zipnova_log"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+</odoo>

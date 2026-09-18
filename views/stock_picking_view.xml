@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_picking_form_zipnova" model="ir.ui.view">
+        <field name="name">stock.picking.form.zipnova</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Zipnova" invisible="picking_type_code != 'outgoing'">
+                    <group>
+                        <field name="zipnova_shipping_id"/>
+                        <field name="zipnova_shipping_delivery_id"/>
+                        <field name="zipnova_shipping_carrier_tracking_id"/>
+                        <field name="zipnova_shipping_carrier_tracking_id_alt"/>
+                        <field name="zipnova_shipping_tracking" widget="url"/>
+                        <field name="zipnova_shipping_tracking_external" widget="url"/>
+                        <field name="zipnova_estimated_delivery_time"/>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

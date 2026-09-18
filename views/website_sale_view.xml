@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="address_zipnova" inherit_id="website_sale.address">
+        <xpath expr="//div[contains(@t-attf-class, 'div_street')]" position="replace">
+            <div t-attf-class="#{error.get('street') and 'o_has_error'} div_street col-lg-12 mb-2">
+                <label class="col-form-label" for="street">Address</label>
+                <input
+                    type="text"
+                    name="street"
+                    t-attf-class="form-control #{error.get('street') and 'is-invalid' or ''}"
+                    t-att-value="'street' in checkout and checkout['street']"
+                    placeholder="Ej: Avenida Siempreviva 742"
+                />
+            </div>
+        </xpath>
+        <xpath expr="//div[contains(@t-attf-class, 'div_street2')]" position="replace">
+            <div t-attf-class="mb-2 #{error.get('street2') and 'o_has_error' or ''} col-lg-12 div_street2">
+                <label class="col-form-label label-optional" for="street2">Apartment (optional)</label>
+                <input
+                    type="text"
+                    name="street2"
+                    t-attf-class="form-control #{error.get('street2') and 'is-invalid' or ''}"
+                    t-att-value="'street2' in checkout and checkout['street2']"
+                    placeholder="Ej: 201"
+                />
+            </div>
+        </xpath>
+    </template>
+</odoo>

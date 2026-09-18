@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_order_form_zipnova" model="ir.ui.view">
+        <field name="name">sale.order.form.zipnova</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <field name="zipnova_delivery_type" invisible="1"/>
+                <field name="zipnova_shipping_id" invisible="1"/>
+                <button
+                    type="object"
+                    name="action_open_validate_delivery_carrier_wizard"
+                    string="Create Zipnova shipment"
+                    invisible="zipnova_delivery_type != 'zipnova' or zipnova_shipping_id"
+                    class="btn-primary"
+                />
+                <button
+                    type="object"
+                    name="action_zipnova_delete_shipping"
+                    string="Cancel Zipnova shipment"
+                    invisible="not zipnova_shipping_id"
+                    confirm="Cancel the Zipnova shipment?"
+                />
+                <button
+                    type="object"
+                    name="action_zipnova_get_label"
+                    string="Download Zipnova label"
+                    invisible="not zipnova_shipping_id"
+                />
+            </xpath>
+            <xpath expr="//notebook" position="inside">
+                <page string="Zipnova" name="zipnova">
+                    <group>
+                        <group>
+                            <field
+                                name="zipnova_shipping_label_bin"
+                                filename="zipnova_shipping_label_filename"
+                            />
+                            <field name="zipnova_shipping_label_filename" invisible="1"/>
+                            <field name="zipnova_pickup_is_pickup"/>
+                            <field name="zipnova_pickup_carrier_id"/>
+                            <field name="zipnova_pickup_point_id"/>
+                            <field name="zipnova_pickup_name"/>
+                            <field name="zipnova_pickup_address"/>
+                            <field name="zipnova_logistic_type"/>
+                        </group>
+                        <group>
+                            <field name="zipnova_shipping_id" readonly="1"/>
+                            <field name="zipnova_shipping_delivery_id" readonly="1"/>
+                            <field name="zipnova_shipping_carrier_tracking_id" readonly="1"/>
+                            <field name="zipnova_shipping_carrier_tracking_id_alt" readonly="1"/>
+                            <field name="zipnova_shipping_tracking" readonly="1" widget="url"/>
+                            <field name="zipnova_shipping_tracking_external" readonly="1" widget="url"/>
+                            <field name="zipnova_estimated_delivery_time" readonly="1"/>
+                        </group>
+                    </group>
+                </page>
+                <page string="Zipnova Logs" name="zipnova_logs" groups="base.group_no_one">
+                    <field name="zipnova_log_ids" readonly="1">
+                        <tree>
+                            <field name="dt_llamada"/>
+                            <field name="llamada"/>
+                            <field name="request"/>
+                            <field name="response" optional="hide"/>
+                        </tree>
+                    </field>
+                </page>
+            </xpath>
+            <xpath expr="//group[@name='sale_shipping']" position="inside">
+                <field name="zipnova_min_date" widget="date"/>
+                <field name="zipnova_max_date" widget="date"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

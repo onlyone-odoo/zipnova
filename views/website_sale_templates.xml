@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="address_on_payment_zipnova" inherit_id="website_sale.address_on_payment">
+        <xpath expr="//div[@id='shipping_and_billing']" position="inside">
+            <div t-if="order.zipnova_pickup_is_pickup" class="mt-2" id="zipnova_pickup_on_payment">
+                <b>Pickup: </b>
+                <span
+                    t-esc="(order.zipnova_pickup_name or '') + ' ' + (order.zipnova_pickup_address or '')"
+                    class="address-inline lh-sm o_address_font_sm"
+                />
+            </div>
+            <div class="mt-2" t-if="order.zipnova_shipping_tracking">
+                <b>Tracking: </b>
+                <a
+                    t-att-href="order.zipnova_shipping_tracking"
+                    target="_blank"
+                    t-esc="order.zipnova_shipping_tracking"
+                />
+            </div>
+            <div class="mt-2" t-if="order.zipnova_estimated_delivery_time">
+                <b>Estimated delivery: </b>
+                <span t-esc="order.zipnova_estimated_delivery_time"/>
+            </div>
+            <div class="mt-2" t-if="order.zipnova_shipping_carrier_tracking_id_alt">
+                <b>Tracking code: </b>
+                <span t-esc="order.zipnova_shipping_carrier_tracking_id_alt"/>
+            </div>
+        </xpath>
+    </template>
+</odoo>

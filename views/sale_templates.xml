@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="sale_order_portal_content_zipnova" inherit_id="sale.sale_order_portal_content">
+        <xpath expr="//div[@id='informations']" position="inside">
+            <div class="row mt16">
+                <div class="col-12">
+                    <strong>Estimated delivery: </strong>
+                    <span t-if="sale_order.zipnova_min_date and sale_order.zipnova_max_date">
+                        <t t-esc="sale_order.zipnova_min_date.strftime('%d/%m/%Y')"/>
+                        -
+                        <t t-esc="sale_order.zipnova_max_date.strftime('%d/%m/%Y')"/>
+                    </span>
+                </div>
+            </div>
+        </xpath>
+    </template>
+</odoo>

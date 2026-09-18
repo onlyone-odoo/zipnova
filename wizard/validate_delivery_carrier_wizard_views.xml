@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_validate_delivery_carrier_wizard_form" model="ir.ui.view">
+        <field name="name">validate.delivery.carrier.wizard.form</field>
+        <field name="model">validate.delivery.carrier.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Confirm shipment">
+                <group>
+                    <group>
+                        <field name="order_id" readonly="1" invisible="1"/>
+                        <field name="carrier_id" readonly="1" invisible="1"/>
+                        <field name="currency_id" invisible="1"/>
+                        <field name="total_weight"/>
+                        <field name="total_length"/>
+                        <field name="total_height"/>
+                        <field name="total_width"/>
+                        <label for="delivery_price"/>
+                        <div class="o_row">
+                            <field
+                                name="delivery_price"
+                                widget="monetary"
+                                options="{'currency_field': 'currency_id'}"
+                            />
+                            <button name="update_price" type="object" string="Get rate"/>
+                        </div>
+                    </group>
+                </group>
+                <footer>
+                    <button
+                        name="action_confirm"
+                        confirm="Create the Zipnova shipment?"
+                        string="Continue"
+                        type="object"
+                        class="btn-primary"
+                    />
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

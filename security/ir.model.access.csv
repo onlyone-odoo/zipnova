@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_zipnova_shipping_salesman,zipnova.shipping.salesman,model_zipnova_shipping,sales_team.group_sale_salesman,1,1,1,1
+access_zipnova_log_salesman,zipnova.log.salesman,model_zipnova_log,sales_team.group_sale_salesman,1,0,0,0
+access_zipnova_log_manager,zipnova.log.manager,model_zipnova_log,sales_team.group_sale_manager,1,1,1,1
+access_validate_delivery_carrier_wizard,validate.delivery.carrier.wizard,model_validate_delivery_carrier_wizard,sales_team.group_sale_salesman,1,1,1,1
