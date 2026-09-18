@@ -3,6 +3,7 @@ from . import zipnova_log
 from . import zipnova_shipping
 from . import delivery_carrier
 from . import res_company
+from . import res_config_settings
 from . import product
 from . import sale_order
 from . import sale_order_line

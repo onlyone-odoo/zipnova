@@ -5,7 +5,8 @@ Connector for Zipnova shipping (formerly Zippin) on Odoo 17.
 ## Setup
 
 1. Install the `zipnova` module.
-2. Open the company form and fill the Zipnova credentials (Configuración > Integraciones in Zipnova: API Token + API Secret + Account ID).
+2. Open **Settings → Sales → Shipping → Zipnova** and fill Account ID, API Token and API Secret
+   (from Zipnova: Configuración → Integraciones). The same fields remain on the company form.
 3. Optional: set **Origin ID** to a Zipnova address-book origin. If empty, Zipnova uses the account default.
 4. Optional: set **Integration Source** (`odoo` by default) so quoting rules can target this connector.
 5. Create delivery methods with provider **Zipnova**.
