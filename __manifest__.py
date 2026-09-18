@@ -2,7 +2,7 @@
 {
     "name": "Zipnova Odoo Connector",
     "summary": "Quote, create and track Zipnova shipments from Sales and eCommerce",
-    "version": "17.0.1.0.0",
+    "version": "17.0.2.0.0",
     "category": "Inventory/Delivery",
     "author": "OnlyOne",
     "website": "https://www.onlyone.com.ar",

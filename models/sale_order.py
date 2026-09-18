@@ -7,6 +7,7 @@ from odoo.exceptions import UserError, ValidationError
 
 
 class SaleOrder(models.Model):
+    _name = "sale.order"
     _inherit = ["sale.order", "zipnova.api.mixin"]
 
     zipnova_pickup_carrier_id = fields.Char(string="Zipnova Carrier ID", copy=False)

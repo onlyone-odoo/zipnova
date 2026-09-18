@@ -9,6 +9,7 @@ from .zipnova_api import ID_PICKUP_DELIVERY, ID_STANDARD_DELIVERY
 
 
 class DeliveryCarrier(models.Model):
+    _name = "delivery.carrier"
     _inherit = ["delivery.carrier", "zipnova.api.mixin"]
 
     delivery_type = fields.Selection(
