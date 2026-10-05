@@ -42,6 +42,20 @@ Connector for Zipnova shipping (formerly Zippin) on Odoo 17.
   parameter `zipnova.log_retention_days` (`0` keeps them forever).
 - API credentials are only visible to Settings administrators.
 
+## Testing
+
+Zipnova has no separate sandbox API. The test mode is a flag that Zipnova support
+enables on the account; requests still go to `https://api.zipnova.com.ar/v2` with the
+same credentials.
+
+1. Register the account normally and ask Zipnova support to enable test mode before
+   creating shipments from a staging database.
+2. Quoting does not create a shipment and can be done without test mode.
+3. When testing is finished, ask support to switch the account back to operational
+   mode. Otherwise carriers will not accept the shipments.
+
+Source: https://ayuda-envios.zipnova.com/hc/es-419/articles/45276943102099
+
 ## Notes
 
 - API base URL: `https://api.zipnova.com.ar/v2`
