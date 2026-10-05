@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 from odoo.tests import tagged
 from odoo.tests.common import TransactionCase
 
@@ -67,6 +67,7 @@ class TestZipnovaPayload(TransactionCase):
             {
                 "name": "Envio Zipnova",
                 "type": "service",
+                "taxes_id": [(5, 0, 0)],
                 "uom_id": cls.env.ref("uom.product_uom_unit").id,
                 "uom_po_id": cls.env.ref("uom.product_uom_unit").id,
             }
@@ -221,3 +222,106 @@ class TestZipnovaPayload(TransactionCase):
         self.product.zipnova_product_length = 0
         with self.assertRaises(UserError):
             self.order._zipnova_prepare_items()
+
+    def test_rate_missing_dimensions_returns_error(self):
+        self.product.zipnova_product_length = 0
+        vals = self.carrier.zipnova_rate_shipment(self.order)
+        self.assertFalse(vals["success"])
+        self.assertTrue(vals["error_message"])
+
+    def _quote_response(self):
+        return {
+            "all_results": [
+                {
+                    "selectable": True,
+                    "logistic_type": "carrier_pickup",
+                    "carrier": {"id": ID_OCA, "name": "OCA"},
+                    "service_type": {"id": ID_STANDARD_DELIVERY, "code": "standard_delivery"},
+                    "amounts": {"price": 1000, "price_incl_tax": 1210},
+                    "delivery_time": {},
+                    "pickup_points": [],
+                }
+            ]
+        }
+
+    def test_rate_uses_net_price_when_tax_excluded(self):
+        tax = self.env["account.tax"].create(
+            {
+                "name": "IVA 21% test",
+                "amount": 21,
+                "type_tax_use": "sale",
+                "price_include": False,
+                "company_id": self.company.id,
+            }
+        )
+        self.carrier.product_id.taxes_id = tax
+        vals = self.carrier._get_rate_vals_from_response(self.order, self._quote_response())
+        self.assertEqual(vals["price"], 1000)
+
+    def test_rate_uses_gross_price_when_tax_included(self):
+        tax = self.env["account.tax"].create(
+            {
+                "name": "IVA 21% incl test",
+                "amount": 21,
+                "type_tax_use": "sale",
+                "price_include": True,
+                "company_id": self.company.id,
+            }
+        )
+        self.carrier.product_id.taxes_id = tax
+        vals = self.carrier._get_rate_vals_from_response(self.order, self._quote_response())
+        self.assertEqual(vals["price"], 1210)
+
+    def test_items_convert_line_uom(self):
+        dozen = self.env.ref("uom.product_uom_dozen")
+        self.order.order_line.write({"product_uom": dozen.id, "product_uom_qty": 1})
+        self.assertEqual(len(self.order._zipnova_prepare_items()), 12)
+
+    def test_items_round_up_fractional_qty(self):
+        self.order.order_line.product_uom_qty = 2.5
+        self.assertEqual(len(self.order._zipnova_prepare_items()), 3)
+
+    def test_items_explode_kit_by_bom_quantity(self):
+        kit = self.env["product.product"].create({"name": "Kit Test", "type": "consu"})
+        self.env["mrp.bom"].create(
+            {
+                "product_tmpl_id": kit.product_tmpl_id.id,
+                "product_qty": 2,
+                "type": "phantom",
+                "bom_line_ids": [(0, 0, {"product_id": self.product.id, "product_qty": 2})],
+            }
+        )
+        self.order.order_line.write({"product_id": kit.id, "product_uom_qty": 2})
+        # 2 kits, BoM makes 2 kits with 2 components -> 2 components.
+        self.assertEqual(len(self.order._zipnova_prepare_items()), 2)
+
+    def test_replace_pickup_points_keeps_other_carriers(self):
+        shipping = self.env["zipnova.shipping"]
+        shipping.create(
+            {"order_id": self.order.id, "carrier_id": "233", "point_id": "1", "name": "A"}
+        )
+        self.order._zipnova_replace_pickup_points(
+            [{"order_id": self.order.id, "carrier_id": "208", "point_id": "2", "name": "B"}],
+            carrier_code="208",
+        )
+        self.assertEqual(
+            sorted(self.order.zipnova_pickup_ids.mapped("carrier_id")), ["208", "233"]
+        )
+
+    def test_pickup_required_before_payment(self):
+        self.carrier.zipnova_shipment_type_is_pickup = True
+        self.assertTrue(self.order._zipnova_pickup_error())
+        point = self.env["zipnova.shipping"].create(
+            {
+                "order_id": self.order.id,
+                "carrier_id": str(ID_OCA),
+                "point_id": "99",
+                "name": "Sucursal",
+            }
+        )
+        self.order._zipnova_set_pickup_point(point)
+        self.assertFalse(self.order._zipnova_pickup_error())
+
+    def test_numeric_account_id(self):
+        with self.assertRaises(ValidationError):
+            self.company.zipnova_id = "abc"

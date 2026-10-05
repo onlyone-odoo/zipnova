@@ -76,12 +76,15 @@ publicWidget.registry.websiteSaleDeliveryZipnova = publicWidget.Widget.extend({
         const payload = {
             carrier_id: option.dataset.carrierId,
             point_id: option.dataset.pointId,
-            name: option.dataset.name,
-            address: option.dataset.address,
+            delivery_carrier_id: parseInt(select.dataset.deliveryCarrierId, 10),
         };
         try {
-            await jsonrpc("/shop/zipnova/pickup", payload);
+            const result = await jsonrpc("/shop/zipnova/pickup", payload);
+            if (!result || !result.success) {
+                select.selectedIndex = 0;
+            }
         } catch (error) {
+            select.selectedIndex = 0;
             console.error("Zipnova pickup save failed", error);
         }
     },

@@ -1,9 +1,16 @@
 import base64
+import logging
+import math
 import re
 from datetime import datetime, timedelta
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
+from odoo.tools import float_round
+
+_logger = logging.getLogger(__name__)
+
+ZIPNOVA_MAX_ITEMS = 1000
 
 
 class SaleOrder(models.Model):
@@ -76,54 +83,103 @@ class SaleOrder(models.Model):
         self.ensure_one()
         return self.order_line.filtered("is_delivery")
 
-    def _zipnova_replace_pickup_points(self, pickup_vals):
+    def _zipnova_replace_pickup_points(self, pickup_vals, carrier_code=None):
+        """Replace the stored pickup points of one Zipnova carrier."""
         self.ensure_one()
-        self.zipnova_pickup_ids.unlink()
+        points = self.zipnova_pickup_ids
+        if carrier_code:
+            points = points.filtered(lambda point: point.carrier_id == carrier_code)
+        points.unlink()
         valid_vals = [vals for vals in pickup_vals if vals.get("order_id")]
         if valid_vals:
             self.env["zipnova.shipping"].create(valid_vals)
 
-    def _zipnova_iter_storable_lines(self, product, qty):
-        """Yield (product, qty) for storable products, exploding phantom BoMs."""
-        phantom_boms = product.bom_ids.filtered(lambda bom: bom.type == "phantom")
-        if phantom_boms:
-            bom = phantom_boms[0]
-            for bom_line in bom.bom_line_ids:
-                yield from self._zipnova_iter_storable_lines(
-                    bom_line.product_id, qty * bom_line.product_qty
+    def _zipnova_line_components(self, line):
+        """Return [(product, qty)] storable units of a line in product UoM.
+
+        Kits (phantom BoMs) and non-storable products with a normal BoM are
+        exploded into their storable components.
+        """
+        product = line.product_id
+        qty = line.product_uom._compute_quantity(line.product_uom_qty, product.uom_id)
+        bom_model = self.env["mrp.bom"].sudo()
+        bom = bom_model._bom_find(
+            product, company_id=self.company_id.id, bom_type="phantom"
+        )[product]
+        if not bom and product.type != "product":
+            bom = bom_model._bom_find(
+                product, company_id=self.company_id.id, bom_type="normal"
+            )[product]
+        if not bom:
+            return [(product, qty)] if product.type == "product" else []
+        factor = product.uom_id._compute_quantity(qty, bom.product_uom_id) / (
+            bom.product_qty or 1.0
+        )
+        _boms, bom_lines = bom.explode(product, factor)
+        components = []
+        for bom_line, line_vals in bom_lines:
+            component = bom_line.product_id
+            if component.type != "product":
+                continue
+            components.append(
+                (
+                    component,
+                    bom_line.product_uom_id._compute_quantity(
+                        line_vals["qty"], component.uom_id
+                    ),
                 )
-            return
-        if product.type == "product":
-            yield product, qty
+            )
+        return components
 
     def _zipnova_prepare_items(self):
-        """Build Zipnova `items` with integer weight (g) and dimensions (cm)."""
+        """Build Zipnova `items` (one per unit) with integer weight (g) and cm."""
         self.ensure_one()
         items = []
         for line in self.order_line:
-            if line.display_type or line.is_delivery:
+            if line.display_type or line.is_delivery or not line.product_id:
                 continue
-            product = line.product_id
-            if not product:
-                continue
-            normal_boms = product.bom_ids.filtered(lambda bom: bom.type == "normal")
-            if normal_boms and product.type != "product":
-                bom = normal_boms[0]
-                for bom_line in bom.bom_line_ids:
-                    for child, child_qty in self._zipnova_iter_storable_lines(
-                        bom_line.product_id, line.product_uom_qty * bom_line.product_qty
-                    ):
-                        items.extend(self._zipnova_items_for_product(child, child_qty))
-                continue
-            for child, child_qty in self._zipnova_iter_storable_lines(
-                product, line.product_uom_qty
-            ):
-                items.extend(self._zipnova_items_for_product(child, child_qty))
+            for product, qty in self._zipnova_line_components(line):
+                items.extend(self._zipnova_items_for_product(product, qty))
+        if len(items) > ZIPNOVA_MAX_ITEMS:
+            raise UserError(
+                _("Zipnova accepts up to %s units per shipment; this order has %s.")
+                % (ZIPNOVA_MAX_ITEMS, len(items))
+            )
         return items
+
+    def _zipnova_apply_total_overrides(
+        self,
+        items,
+        total_weight=None,
+        total_length=None,
+        total_height=None,
+        total_width=None,
+    ):
+        """Split manual totals (from the confirm wizard) evenly across items."""
+        if not items:
+            return items
+        count = len(items)
+        for key, total, converter in (
+            ("weight", total_weight, self._zipnova_int_weight),
+            ("length", total_length, self._zipnova_int_dim),
+            ("height", total_height, self._zipnova_int_dim),
+            ("width", total_width, self._zipnova_int_dim),
+        ):
+            if total:
+                value = converter(float(total) / count)
+                for item in items:
+                    item[key] = value
+        return items
+
+    def _zipnova_declared_value(self):
+        self.ensure_one()
+        if not self.company_id.zipnova_declared_value:
+            return 0
+        return self.get_amount_total_without_delivery_amount() or 0
 
     def _zipnova_items_for_product(self, product, qty):
         self._zipnova_check_product_dimensions(product)
-        units = max(int(qty), 1)
+        units = max(int(math.ceil(float_round(qty, precision_digits=4))), 1)
         item = {
             "weight": self._zipnova_int_weight(product.weight * 1000),
             "height": self._zipnova_int_dim(product.zipnova_product_height),
@@ -196,14 +252,17 @@ class SaleOrder(models.Model):
             raise UserError(_("The delivery address must have a phone or mobile."))
         phone = self._zipnova_partner_phone(partner)
         if self.zipnova_pickup_is_pickup:
-            if not self.zipnova_pickup_point_id:
+            point_id = self.zipnova_pickup_point_id
+            if not point_id:
                 raise UserError(_("Select a Zipnova pickup point."))
+            if not point_id.isdigit():
+                raise UserError(_("The selected Zipnova pickup point is not valid."))
             return {
                 "name": partner.name,
                 "document": partner.vat or "",
                 "phone": phone,
                 "email": partner.email,
-                "point_id": int(self.zipnova_pickup_point_id),
+                "point_id": int(point_id),
             }
         if not partner.street:
             raise UserError(_("The delivery address must have a street."))
@@ -269,43 +328,28 @@ class SaleOrder(models.Model):
         items = self._zipnova_prepare_items()
         if not items:
             raise UserError(_("The order has no storable products to ship."))
-        if total_weight or total_length or total_height or total_width:
-            count = len(items)
-            item_weight = int(float(total_weight or 0) / count) if total_weight else None
-            item_length = int(float(total_length or 0) / count) if total_length else None
-            item_height = int(float(total_height or 0) / count) if total_height else None
-            item_width = int(float(total_width or 0) / count) if total_width else None
-            for item in items:
-                if total_weight:
-                    item["weight"] = self._zipnova_int_weight(item_weight)
-                if total_length:
-                    item["length"] = self._zipnova_int_dim(item_length)
-                if total_height:
-                    item["height"] = self._zipnova_int_dim(item_height)
-                if total_width:
-                    item["width"] = self._zipnova_int_dim(item_width)
-
+        self._zipnova_apply_total_overrides(
+            items,
+            total_weight=total_weight,
+            total_length=total_length,
+            total_height=total_height,
+            total_width=total_width,
+        )
         service_type = (
             "pickup_point" if self.zipnova_pickup_is_pickup else "standard_delivery"
         )
-        declared_value = 0
-        if self.company_id.zipnova_declared_value:
-            declared_value = self.get_amount_total_without_delivery_amount() or 0
-
         payload = {
             "external_id": self._zipnova_external_id(self),
-            "account_id": int(self.company_id.zipnova_id),
+            "account_id": self._zipnova_account_id(self.company_id),
             "source": self._zipnova_source(self.company_id),
             "service_type": service_type,
-            "declared_value": declared_value,
+            "declared_value": self._zipnova_declared_value(),
             "items": items,
             "destination": self._zipnova_create_destination(),
         }
-        if self.company_id.zipnova_origin_id:
-            try:
-                payload["origin_id"] = int(self.company_id.zipnova_origin_id)
-            except (TypeError, ValueError) as err:
-                raise UserError(_("Zipnova Origin ID must be numeric.")) from err
+        origin_id = self._zipnova_origin_id(self.company_id)
+        if origin_id:
+            payload["origin_id"] = origin_id
         if self.zipnova_logistic_type:
             payload["logistic_type"] = self.zipnova_logistic_type
         if self.zipnova_pickup_carrier_id:
@@ -351,7 +395,7 @@ class SaleOrder(models.Model):
     def action_open_validate_delivery_carrier_wizard(self):
         self.ensure_one()
         items = self._zipnova_prepare_items()
-        amount_delivery = self.amount_total - self.get_amount_total_without_delivery_amount()
+        amount_delivery = sum(self.get_lines_delivery().mapped("price_unit"))
         return {
             "name": _("Confirm Shipment"),
             "type": "ir.actions.act_window",
@@ -419,11 +463,22 @@ class SaleOrder(models.Model):
         carrier = self.carrier_id
         if carrier.delivery_type != "zipnova" or not self.delivery_rating_success:
             return res
-        self.zipnova_pickup_carrier_id = str(carrier.zipnova_shipment_type or "")
-        self.zipnova_pickup_is_pickup = bool(carrier.zipnova_shipment_type_is_pickup)
-        pickup = self.zipnova_pickup_ids[:1]
-        if pickup:
-            self.zipnova_logistic_type = pickup.logistic_type
+        carrier_code = str(carrier.zipnova_shipment_type or "")
+        is_pickup = bool(carrier.zipnova_shipment_type_is_pickup)
+        values = {
+            "zipnova_pickup_carrier_id": carrier_code,
+            "zipnova_pickup_is_pickup": is_pickup,
+        }
+        if not is_pickup or self.zipnova_pickup_carrier_id != carrier_code:
+            values.update(
+                {
+                    "zipnova_pickup_point_id": False,
+                    "zipnova_pickup_name": False,
+                    "zipnova_pickup_address": False,
+                    "zipnova_logistic_type": False,
+                }
+            )
+        self.write(values)
         return res
 
     @api.depends("zipnova_shipping_id")
@@ -435,11 +490,78 @@ class SaleOrder(models.Model):
             order.zipnova_shipping_label_filename = "%s.pdf" % name
 
     def action_open_delivery_wizard(self):
-        if any(order.state not in ("draft", "sent") for order in self):
+        if any(order.zipnova_shipping_id for order in self):
             raise UserError(
-                _("Adding a shipping method is only allowed in quotation state.")
+                _("Cancel the Zipnova shipment before changing the shipping method.")
             )
         return super().action_open_delivery_wizard()
+
+    def _zipnova_pickup_error(self):
+        """Return an error message if a pickup carrier lacks a valid point."""
+        self.ensure_one()
+        carrier = self.carrier_id
+        if carrier.delivery_type != "zipnova" or not carrier.zipnova_shipment_type_is_pickup:
+            return False
+        point = self.zipnova_pickup_ids.filtered(
+            lambda rec: rec.point_id == self.zipnova_pickup_point_id
+            and rec.carrier_id == str(carrier.zipnova_shipment_type or "")
+        )
+        if not self.zipnova_pickup_point_id or not point:
+            return _("Select a pickup point for %s.") % carrier.name
+        return False
+
+    def _check_cart_is_ready_to_be_paid(self):
+        res = super()._check_cart_is_ready_to_be_paid()
+        pickup_error = self._zipnova_pickup_error()
+        if pickup_error:
+            raise ValidationError(pickup_error)
+        return res
+
+    def _zipnova_set_pickup_point(self, point):
+        """Store a quoted pickup point (zipnova.shipping) on the order."""
+        self.ensure_one()
+        self.write(
+            {
+                "zipnova_pickup_carrier_id": point.carrier_id,
+                "zipnova_pickup_point_id": point.point_id,
+                "zipnova_pickup_name": point.name,
+                "zipnova_pickup_address": point.address,
+                "zipnova_pickup_is_pickup": True,
+                "zipnova_logistic_type": point.logistic_type or self.zipnova_logistic_type,
+            }
+        )
+
+    def _zipnova_create_shipping_after_payment(self):
+        """Create Zipnova shipments for paid eCommerce orders without failing.
+
+        Errors are posted on the order chatter so the salesperson can retry
+        manually from the backend.
+        """
+        for order in self:
+            if (
+                order.state != "sale"
+                or not order.website_id
+                or order.zipnova_shipping_id
+                or order.carrier_id.delivery_type != "zipnova"
+            ):
+                continue
+            try:
+                with self.env.cr.savepoint():
+                    order._zipnova_create_shipping()
+            except UserError as err:
+                order.message_post(
+                    body=_("Zipnova shipment could not be created: %s") % err
+                )
+            except Exception:
+                _logger.exception(
+                    "Zipnova shipment creation failed for sale.order %s", order.id
+                )
+                order.message_post(
+                    body=_(
+                        "Zipnova shipment could not be created. "
+                        "Check the Zipnova logs and retry from the order."
+                    )
+                )
 
     def _prepare_invoice(self):
         values = super()._prepare_invoice()
@@ -495,28 +617,22 @@ class SaleOrder(models.Model):
         self.zipnova_pickup_ids.unlink()
 
     @api.onchange("commitment_date", "zipnova_min_date", "zipnova_max_date")
-    def update_dates(self):
-        for order in self:
-            commitment_date = order.commitment_date
-            if isinstance(commitment_date, datetime):
-                commitment_date = commitment_date.date()
-            zipnova_min_date = order.zipnova_min_date
-            zipnova_max_date = order.zipnova_max_date
-            if zipnova_min_date and zipnova_max_date and zipnova_min_date > zipnova_max_date:
-                raise ValidationError(
-                    _(
-                        "The minimum estimated delivery date must be before "
-                        "the maximum estimated delivery date."
-                    )
-                )
-            if (
-                commitment_date
-                and zipnova_max_date
-                and commitment_date > zipnova_max_date
-            ):
-                raise ValidationError(
-                    _(
-                        "The delivery date must be before the maximum "
-                        "estimated delivery date."
-                    )
-                )
+    def _onchange_zipnova_dates(self):
+        commitment_date = self.commitment_date
+        if isinstance(commitment_date, datetime):
+            commitment_date = commitment_date.date()
+        min_date = self.zipnova_min_date
+        max_date = self.zipnova_max_date
+        message = False
+        if min_date and max_date and min_date > max_date:
+            message = _(
+                "The minimum estimated delivery date must be before "
+                "the maximum estimated delivery date."
+            )
+        elif commitment_date and max_date and commitment_date > max_date:
+            message = _(
+                "The delivery date is after the maximum Zipnova estimated delivery date."
+            )
+        if message:
+            return {"warning": {"title": _("Zipnova delivery dates"), "message": message}}
+        return None

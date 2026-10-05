@@ -22,10 +22,29 @@ Connector for Zipnova shipping (formerly Zippin) on Odoo 17.
 
 - Quote from Sales (Add shipping method) or the website checkout.
 - Create the shipment from the sales order, download the PDF label, cancel if needed.
-- Website pickup methods show nearby pickup points; the selected point is stored on the order.
+- Website pickup methods show nearby pickup points; only points returned by the Zipnova
+  quote are accepted, and payment is blocked until one is selected.
+- Website shipments are created when the payment transaction is `done`
+  (pending payments such as wire transfers do not create shipments). Failures are posted
+  on the order chatter so they can be retried from the backend.
+
+## Pricing and taxes
+
+- If the delivery product has sale taxes **not included** in price, the net Zipnova price
+  (`amounts.price`) is used and Odoo adds VAT.
+- If its taxes are price-included, or it has no taxes, `amounts.price_incl_tax` is used.
+
+## Logs
+
+- API calls are logged on the order (Zipnova Logs tab, debug mode). Failed calls are kept
+  even when the operation is rolled back.
+- Logs older than 30 days are deleted by the daily autovacuum. Change it with the system
+  parameter `zipnova.log_retention_days` (`0` keeps them forever).
+- API credentials are only visible to Settings administrators.
 
 ## Notes
 
 - API base URL: `https://api.zipnova.com.ar/v2`
 - Authentication: HTTP Basic (API Token / API Secret)
 - `external_id` sent to Zipnova is the sales order number (max 30 characters)
+- One Zipnova item is sent per unit (UoM converted, kits exploded); max 1000 units per shipment

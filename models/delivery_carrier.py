@@ -40,6 +40,15 @@ class DeliveryCarrier(models.Model):
         estimated_delivery += relativedelta(days=fixed_margin_time or 0)
         return estimated_delivery.isoformat()
 
+    def _zipnova_rate_error(self, message):
+        return {
+            "success": False,
+            "price": 0,
+            "error_message": message,
+            "warning_message": False,
+            "zipnova_pickup": [],
+        }
+
     def zipnova_rate_shipment(
         self,
         order,
@@ -49,62 +58,17 @@ class DeliveryCarrier(models.Model):
         total_width=None,
     ):
         self.ensure_one()
-        self._zipnova_check_credentials(order.company_id)
-
         public_partner = self.env.ref("base.public_partner", raise_if_not_found=False)
         if public_partner and order.partner_id == public_partner:
-            return {
-                "success": False,
-                "price": 0,
-                "error_message": False,
-                "warning_message": False,
-                "zipnova_pickup": [],
-            }
-
-        items = order._zipnova_prepare_items()
-        if not items:
-            return {
-                "success": False,
-                "price": 0,
-                "error_message": _("The order has no storable products to ship."),
-                "warning_message": False,
-                "zipnova_pickup": [],
-            }
-
-        if total_weight or total_length or total_height or total_width:
-            count = len(items)
-            item_weight = int(float(total_weight or 0) / count) if total_weight else None
-            item_length = int(float(total_length or 0) / count) if total_length else None
-            item_height = int(float(total_height or 0) / count) if total_height else None
-            item_width = int(float(total_width or 0) / count) if total_width else None
-            for item in items:
-                if total_weight:
-                    item["weight"] = self._zipnova_int_weight(item_weight)
-                if total_length:
-                    item["length"] = self._zipnova_int_dim(item_length)
-                if total_height:
-                    item["height"] = self._zipnova_int_dim(item_height)
-                if total_width:
-                    item["width"] = self._zipnova_int_dim(item_width)
-
-        declared_value = 0
-        if order.company_id.zipnova_declared_value:
-            declared_value = order.get_amount_total_without_delivery_amount() or 0
-
-        payload = {
-            "account_id": int(order.company_id.zipnova_id),
-            "source": self._zipnova_source(order.company_id),
-            "declared_value": declared_value,
-            "items": items,
-            "destination": order._zipnova_quote_destination(),
-        }
-        if order.company_id.zipnova_origin_id:
-            try:
-                payload["origin_id"] = int(order.company_id.zipnova_origin_id)
-            except (TypeError, ValueError) as err:
-                raise UserError(_("Zipnova Origin ID must be numeric.")) from err
-
+            return self._zipnova_rate_error(False)
         try:
+            payload = self._zipnova_prepare_quote_payload(
+                order,
+                total_weight=total_weight,
+                total_length=total_length,
+                total_height=total_height,
+                total_width=total_width,
+            )
             status, data, _raw = self._zipnova_request(
                 order.company_id,
                 "POST",
@@ -114,27 +78,88 @@ class DeliveryCarrier(models.Model):
                 log_name="quote",
             )
         except UserError as err:
-            return {
-                "success": False,
-                "price": 0,
-                "error_message": str(err),
-                "warning_message": False,
-                "zipnova_pickup": [],
-            }
+            return self._zipnova_rate_error(str(err))
 
         if status != 200 or not data:
-            return {
-                "success": False,
-                "price": 0,
-                "error_message": self._zipnova_error_message(status, data),
-                "warning_message": False,
-                "zipnova_pickup": [],
-            }
+            return self._zipnova_rate_error(self._zipnova_error_message(status, data))
 
         result = self._get_rate_vals_from_response(order, data)
         if result.get("success"):
-            order._zipnova_replace_pickup_points(result.get("zipnova_pickup") or [])
+            order._zipnova_replace_pickup_points(
+                result.get("zipnova_pickup") or [],
+                carrier_code=str(self.zipnova_shipment_type or ""),
+            )
         return result
+
+    def _zipnova_finalize_price(self, order, price):
+        """Apply fiscal position, margins and free-over like `rate_shipment`."""
+        self.ensure_one()
+        company = self.company_id or order.company_id or self.env.company
+        price = self.product_id._get_tax_included_unit_price(
+            company,
+            company.currency_id,
+            order.date_order,
+            "sale",
+            fiscal_position=order.fiscal_position_id,
+            product_price_unit=price,
+            product_currency=company.currency_id,
+        )
+        price = self.with_context(order=order)._apply_margins(price)
+        if self.free_over:
+            amount = self._compute_currency(
+                order,
+                order._compute_amount_total_without_delivery(),
+                "pricelist_to_company",
+            )
+            if amount >= self.amount:
+                price = 0.0
+        return price
+
+    def _zipnova_prepare_quote_payload(
+        self,
+        order,
+        total_weight=None,
+        total_length=None,
+        total_height=None,
+        total_width=None,
+    ):
+        """Build the /shipments/quote payload. Raises UserError on missing data."""
+        company = order.company_id
+        self._zipnova_check_credentials(company)
+        items = order._zipnova_prepare_items()
+        if not items:
+            raise UserError(_("The order has no storable products to ship."))
+        order._zipnova_apply_total_overrides(
+            items,
+            total_weight=total_weight,
+            total_length=total_length,
+            total_height=total_height,
+            total_width=total_width,
+        )
+        payload = {
+            "account_id": self._zipnova_account_id(company),
+            "source": self._zipnova_source(company),
+            "declared_value": order._zipnova_declared_value(),
+            "items": items,
+            "destination": order._zipnova_quote_destination(),
+        }
+        origin_id = self._zipnova_origin_id(company)
+        if origin_id:
+            payload["origin_id"] = origin_id
+        return payload
+
+    def _zipnova_price_from_amounts(self, amounts, company):
+        """Return the Zipnova price consistent with the delivery product taxes.
+
+        Odoo adds the delivery product taxes on top of the rated price unless
+        they are price-included, so the net price is used in that case to
+        avoid charging VAT twice.
+        """
+        # Public website users cannot read account.tax; only flags are read.
+        taxes = self.product_id.sudo().taxes_id._filter_taxes_by_company(company)
+        if taxes and not all(taxes.mapped("price_include")):
+            return amounts.get("price") or amounts.get("price_incl_tax")
+        return amounts.get("price_incl_tax") or amounts.get("price")
 
     def _get_rate_vals_from_response(self, order, response):
         """Pick the cheapest selectable option for this carrier configuration."""
@@ -161,8 +186,9 @@ class DeliveryCarrier(models.Model):
             carrier_id = carrier.get("id")
             service_id = service.get("id")
             if service_id == wanted_service and carrier_id == wanted_carrier:
-                amounts = option.get("amounts") or {}
-                price = amounts.get("price_incl_tax")
+                price = self._zipnova_price_from_amounts(
+                    option.get("amounts") or {}, order.company_id
+                )
                 if price and (shipment_price is None or price < shipment_price):
                     shipment_price = price
                     logistic_type = option.get("logistic_type") or ""

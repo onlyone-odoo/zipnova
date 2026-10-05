@@ -7,14 +7,17 @@ class ResConfigSettings(models.TransientModel):
     zipnova_id = fields.Char(
         related="company_id.zipnova_id",
         readonly=False,
+        groups="base.group_system",
     )
     zipnova_key = fields.Char(
         related="company_id.zipnova_key",
         readonly=False,
+        groups="base.group_system",
     )
     zipnova_secret = fields.Char(
         related="company_id.zipnova_secret",
         readonly=False,
+        groups="base.group_system",
     )
     zipnova_origin_id = fields.Char(
         related="company_id.zipnova_origin_id",
