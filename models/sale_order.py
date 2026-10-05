@@ -458,7 +458,7 @@ class SaleOrder(models.Model):
     def _set_delivery_method(self, delivery_method, rate=None):
         """Store the Zipnova carrier chosen on the website checkout.
 
-        Odoo 18 replaced `_check_carrier_quotation` with this method.
+        Odoo 18 and 19 replaced `_check_carrier_quotation` with this method.
         """
         self.ensure_one()
         if (

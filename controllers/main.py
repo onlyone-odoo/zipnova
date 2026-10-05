@@ -30,7 +30,7 @@ class ZipnovaWebsiteSale(WebsiteSale):
 
     @http.route(
         "/shop/zipnova/pickup_points",
-        type="json",
+        type="jsonrpc",
         auth="public",
         website=True,
         sitemap=False,
@@ -67,7 +67,7 @@ class ZipnovaWebsiteSale(WebsiteSale):
 
     @http.route(
         "/shop/zipnova/pickup",
-        type="json",
+        type="jsonrpc",
         auth="public",
         website=True,
         sitemap=False,

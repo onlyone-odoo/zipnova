@@ -7,8 +7,7 @@ class PaymentTransaction(models.Model):
     def _post_process(self):
         """Create Zipnova shipments once the eCommerce payment is confirmed.
 
-        Odoo 18 confirms the sales order inside `_post_process` instead of
-        `_reconcile_after_done`.
+        Odoo 18 and 19 confirm the sales order inside `_post_process`.
         """
         res = super()._post_process()
         paid_txs = self.filtered(
