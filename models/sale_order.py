@@ -106,12 +106,12 @@ class SaleOrder(models.Model):
         bom = bom_model._bom_find(
             product, company_id=self.company_id.id, bom_type="phantom"
         )[product]
-        if not bom and product.type != "product":
+        if not bom and not product.is_storable:
             bom = bom_model._bom_find(
                 product, company_id=self.company_id.id, bom_type="normal"
             )[product]
         if not bom:
-            return [(product, qty)] if product.type == "product" else []
+            return [(product, qty)] if product.is_storable else []
         factor = product.uom_id._compute_quantity(qty, bom.product_uom_id) / (
             bom.product_qty or 1.0
         )
@@ -119,7 +119,7 @@ class SaleOrder(models.Model):
         components = []
         for bom_line, line_vals in bom_lines:
             component = bom_line.product_id
-            if component.type != "product":
+            if not component.is_storable:
                 continue
             components.append(
                 (
@@ -455,14 +455,33 @@ class SaleOrder(models.Model):
             days = 0
         return fields.Date.to_string(fields.Date.context_today(self) + timedelta(days=days))
 
-    def _check_carrier_quotation(self, force_carrier_id=None, keep_carrier=False):
-        res = super()._check_carrier_quotation(
-            force_carrier_id=force_carrier_id, keep_carrier=keep_carrier
-        )
+    def _set_delivery_method(self, delivery_method, rate=None):
+        """Store the Zipnova carrier chosen on the website checkout.
+
+        Odoo 18 replaced `_check_carrier_quotation` with this method.
+        """
+        self.ensure_one()
+        if (
+            delivery_method
+            and delivery_method.delivery_type == "zipnova"
+            and rate is None
+        ):
+            rate = delivery_method.rate_shipment(self)
+        res = super()._set_delivery_method(delivery_method, rate=rate)
+        if (
+            delivery_method
+            and delivery_method.delivery_type == "zipnova"
+            and rate
+            and rate.get("success")
+            and self.carrier_id == delivery_method
+        ):
+            self._zipnova_store_carrier_choice()
+        return res
+
+    def _zipnova_store_carrier_choice(self):
+        """Copy the selected Zipnova carrier onto the order, keeping a pickup point."""
         self.ensure_one()
         carrier = self.carrier_id
-        if carrier.delivery_type != "zipnova" or not self.delivery_rating_success:
-            return res
         carrier_code = str(carrier.zipnova_shipment_type or "")
         is_pickup = bool(carrier.zipnova_shipment_type_is_pickup)
         values = {
@@ -479,7 +498,6 @@ class SaleOrder(models.Model):
                 }
             )
         self.write(values)
-        return res
 
     @api.depends("zipnova_shipping_id")
     def _compute_shipping_label_filename(self):

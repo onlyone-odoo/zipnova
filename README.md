@@ -1,6 +1,6 @@
 **Zipnova Odoo Connector**
 
-Connector for Zipnova shipping (formerly Zippin) on Odoo 17.
+Connector for Zipnova shipping (formerly Zippin) on Odoo 18.
 
 ## Setup
 

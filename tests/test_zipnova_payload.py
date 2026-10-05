@@ -54,7 +54,7 @@ class TestZipnovaPayload(TransactionCase):
         cls.product = cls.env["product.product"].create(
             {
                 "name": "Caja Test",
-                "type": "product",
+                "is_storable": True,
                 "weight": 0.5,
                 "zipnova_product_length": 10.4,
                 "zipnova_product_height": 5.6,

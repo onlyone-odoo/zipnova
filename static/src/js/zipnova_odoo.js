@@ -1,7 +1,7 @@
 /** @odoo-module **/
 
 import publicWidget from "@web/legacy/js/public/public_widget";
-import { jsonrpc } from "@web/core/network/rpc_service";
+import { rpc } from "@web/core/network/rpc";
 
 publicWidget.registry.websiteSaleDeliveryZipnova = publicWidget.Widget.extend({
     selector: ".oe_website_sale",
@@ -34,7 +34,7 @@ publicWidget.registry.websiteSaleDeliveryZipnova = publicWidget.Widget.extend({
             return;
         }
         try {
-            const data = await jsonrpc("/shop/zipnova/pickup_points", {
+            const data = await rpc("/shop/zipnova/pickup_points", {
                 carrier_id: parseInt(carrierId, 10),
             });
             if (!data || !data.points || !data.points.length) {
@@ -79,7 +79,7 @@ publicWidget.registry.websiteSaleDeliveryZipnova = publicWidget.Widget.extend({
             delivery_carrier_id: parseInt(select.dataset.deliveryCarrierId, 10),
         };
         try {
-            const result = await jsonrpc("/shop/zipnova/pickup", payload);
+            const result = await rpc("/shop/zipnova/pickup", payload);
             if (!result || !result.success) {
                 select.selectedIndex = 0;
             }

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <template id="address_on_payment_zipnova" inherit_id="website_sale.address_on_payment">
-        <xpath expr="//div[@id='shipping_and_billing']" position="inside">
+        <xpath expr="//div[@id='delivery_and_billing']" position="inside">
             <div t-if="order.zipnova_pickup_is_pickup" class="mt-2" id="zipnova_pickup_on_payment">
                 <b>Pickup: </b>
                 <span

@@ -58,12 +58,12 @@
                 </page>
                 <page string="Zipnova Logs" name="zipnova_logs" groups="base.group_no_one">
                     <field name="zipnova_log_ids" readonly="1">
-                        <tree>
+                        <list>
                             <field name="dt_llamada"/>
                             <field name="llamada"/>
                             <field name="request"/>
                             <field name="response" optional="hide"/>
-                        </tree>
+                        </list>
                     </field>
                 </page>
             </xpath>
